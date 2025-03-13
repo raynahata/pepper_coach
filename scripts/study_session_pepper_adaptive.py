@@ -20,6 +20,7 @@ from std_msgs.msg import Int32
 # from config_computer import * ##import from yaml
 from exercise_controller import ExerciseController
 # from ExerciseController_computer import ExerciseController ##TODO: refactor
+from pepper_controller import Pepper
 
 #params TOOD: move these to yaml file
 SET_LENGTH = 20
@@ -63,6 +64,7 @@ class StudySession:
 
         #init controller
         controller = ExerciseController(False, self.log_filename, ROBOT_STYLE, RESTING_HR, MAX_HR, PARTICIPANT_ID)
+        pepper_controller = Pepper()
         rospy.sleep(5)
 
         #Note from refactor: no round 0. All rounds should be > 0
@@ -81,7 +83,11 @@ class StudySession:
             halfway_message = False
 
             #Lower arm all the way down
-            controller.move_right_arm('halfway', 'sides')
+            #controller.move_right_arm('halfway', 'sides')
+            #from lateral_arm_motion_down
+            right_arm_angles_degrees = [101.2, -0.5, 97.3, 5.8, -1.0]
+            right_arm_angles_radians = pepper_controller.degrees_to_radians(right_arm_angles_degrees)
+            pepper_controller.move_arm("R",  right_arm_angles_radians, speed=0.2)
             
             inittime = datetime.now(timezone('EST'))
             
@@ -118,7 +124,11 @@ class StudySession:
             # controller.change_expression('smile', controller.start_set_smile, 4) ##TODO:change to pepper smile based command
 
             #Raise arm all the way up
-            controller.move_right_arm('sides', 'up')
+            # controller.move_right_arm('sides', 'up')
+            # from lateral_arm_motion_up
+            right_arm_angles_degrees = [101.2, -89.4, 97.3, 5.8, -1.0]
+            right_arm_angles_radians = pepper_controller.degrees_to_radians(right_arm_angles_degrees)
+            pepper_controller.move_arm("R", right_arm_angles_radians, speed=0.2)
             
             if set_num + 1 < len(EXERCISE_LIST):
                 halfway_message = False
