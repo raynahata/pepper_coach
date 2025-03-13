@@ -374,11 +374,11 @@ class Pepper:
         """
 
         # right arm angle in degrees (arm high)
-        right_arm_angles_degrees = [-55.9, -0.9, 97.2, 7.1, -0.8]
+        right_arm_angles_degrees = [-55.1, -0.8, 97.1, 6.4, -0.8]
         right_arm_angles_radians = self.degrees_to_radians(right_arm_angles_degrees)
 
         # left arm angles in degrees (arm high)
-        left_arm_angles_degrees = [-55.9, 0.9, -97.2, -7.1, 0.8]
+        left_arm_angles_degrees = [-55.9, 4.8, -98.2, -6.4, 1.9]
         left_arm_angles_radians = self.degrees_to_radians(left_arm_angles_degrees)
 
         # torso angles in degrees (leaning forward)
@@ -418,15 +418,15 @@ if __name__ == '__main__':
 
     pepper.firm_position_action()
     rospy.loginfo("Firm position executed.")
-    rospy.sleep(5)
+    rospy.sleep(15)
+
     pepper.stop_exercise_motion()
-    rospy.sleep(3)
+    rospy.sleep(15)
+    rospy.loginfo("Pepper returned to neutral position.")
 
     pepper.encouraging_position_action()
     rospy.loginfo("Encouraging position executed.")
-    rospy.sleep(5)
-    pepper.stop_exercise_motion()
-    rospy.sleep(3)
+    rospy.sleep(15)
 
     rospy.loginfo("Two feedback positions tested: firm and encouraging")
 
