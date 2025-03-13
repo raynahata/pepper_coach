@@ -5,6 +5,7 @@ import rospy
 import math
 import time
 from std_msgs.msg import String
+from sensor_msgs.msg import Image
 
 # Replace this with your Pepper's IP address
 pepper_ip = "128.237.236.27"
@@ -27,19 +28,28 @@ class Pepper:
         self.tts.setParameter("pitchShift", 1)
         self.exercise_running = False
 
+        #initialize camera
+        resolution = 2  # 640x480
+        color_space = 11  # RGB
+        fps = 5  # Frames per second
+        self.video_service = ALProxy("ALVideoDevice", self.IP, 9559)
+        self.subscriber_id = self.video_service.subscribeCamera("video_stream", 0, resolution, color_space, fps)
+        
         self.state = ""
         self.current_text = ""
         self.action_flag = ""
 
         # ROS Publishers and Subscribers
-        rospy.init_node("pepper_controller", anonymous=True)
+        self.angle_publisher = rospy.Publisher("arm_angles", String, queue_size=10)
         self.state_pub = rospy.Publisher("pepper_state", String, queue_size=10)
         self.text_pub = rospy.Publisher("chat_text", String, queue_size=10)
         self.exercise_publisher = rospy.Publisher("/exercise_command", String, queue_size=10)
+        self.image_publisher = rospy.Publisher("/pepper_camera/image_raw", Image, queue_size=10)
+
         rospy.Subscriber("pepper_state", String, self.callback_state)
         rospy.Subscriber("gpt_speech", String, self.gpt_callback)
         rospy.Subscriber("exercise_command", String, self.exercise_callback)
-        self.angle_publisher = rospy.Publisher("arm_angles", String, queue_size=10)
+
 
         rospy.loginfo("Subscribed to /gpt_speech")
 
@@ -70,8 +80,10 @@ class Pepper:
             speed: Fraction of maximum speed (0.0 to 1.0).
         """
         #publish the angles that are fed into this method
-        parsed_angles = ' '.join("" + angle for angle in angles)
-        self.angle_publisher.publish(parsed_angles)
+
+        ##TODO: listen to angles from pepper robot
+        # parsed_angles = ' '.join("" + angle for angle in angles)
+        # self.angle_publisher.publish(parsed_angles)
 
         if side == "R":
             joint_names = ["RShoulderPitch", "RShoulderRoll", "RElbowYaw", "RElbowRoll", "RWristYaw"]
@@ -417,9 +429,34 @@ class Pepper:
         """
         rospy.loginfo("Starting listener...")
         self.move_arms_up_and_down()
+    
+    def pub_image(self):
+        image = self.video_service.getImageRemote(self.subscriber_id)
+        if image:
+            width = image[0]
+            height = image[1]
+            timestamp = rospy.Time.now()
+
+            # Create ROS Image message
+            ros_image = Image()
+            #ros_image.header = Header()
+            ros_image.header.stamp = timestamp
+            ros_image.width = width
+            ros_image.height = height
+            ros_image.encoding = "rgb8"
+            #ros_image.is_bigendian = 0
+            ros_image.step = width * 3  # 3 bytes per pixel (RGB)
+            ros_image.data = image[6]  # Image pixel data
+
+            # Publish to ROS topic
+            self.image_publisher.publish(ros_image)
+            rospy.loginfo("Published a frame from Pepper.")
+    
+    def shutdown_camera(self):
+        rospy.loginfo("Shutting down Pepper camera node...")
+        self.video_service.unsubscribe(self.subscriber_id)
 
     def main(self):
-        # rospy.init_node('pepper_controller', anonymous=True)
         pepper_listener = Pepper()
         rate = rospy.Rate(10)  # 10hz
         # rospy.Subscriber("move_arm_command", String, pepper_listener.move_arm_callback)
@@ -431,12 +468,16 @@ class Pepper:
                 rospy.loginfo("Going to firm position")
                 pepper_listener.firm_position_action()
 
-            elif self.action_flag == "encouraging":
+            if self.action_flag == "encouraging":
                 action_received = True
                 rospy.loginfo("Going to encouraging position")
                 pepper_listener.encouraging_position_action()
-            else: action_received = False
+            
+            self.pub_image()
+
             rate.sleep()
+        
+        self.shutdown_camera()
 
 if __name__ == '__main__':
     rospy.init_node('pepper_controller', anonymous=True)
