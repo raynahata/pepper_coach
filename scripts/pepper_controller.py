@@ -28,6 +28,7 @@ class Pepper:
 
         self.state = ""
         self.current_text = ""
+        self.action_flag = ""
 
         # ROS Publishers and Subscribers
         rospy.init_node("pepper_controller", anonymous=True)
@@ -394,6 +395,16 @@ class Pepper:
         # move the torso
         self.move_torso(torso_angles_radians, speed=0.1)
 
+    def move_arm_callback(self, msg):
+        rospy.loginfo("Received move arm command: {}".format(msg.data))
+        command = msg.data.lower()
+
+        if command == "firm":
+            self.action_flag = "firm"
+
+        elif command == "encouraging":
+            self.action_flag = "encouraging"
+
     def listener(self):
         """
         Start the ROS listener node and execute the arm motion loop.
@@ -401,12 +412,23 @@ class Pepper:
         rospy.loginfo("Starting listener...")
         self.move_arms_up_and_down()
 
-    def main():
+    def main(self):
         rospy.init_node('pepper_controller', anonymous=True)
         pepper_listener = Pepper(ip="128.237.236.27", port=9559)
+        rate = rospy.Rate(10)  # 10hz
+        rospy.Subscriber("move_arm_command", String, pepper_listener.move_arm_callback)
 
         try:
-            rospy.spin()  # Keep the node running
+            #rospy.spin()  # Keep the node running
+            while not rospy.is_shutdown():
+                if self.action_flag == "firm":
+                    rospy.loginfo("Going to firm position")
+                    pepper_listener.firm_position_action()
+                elif self.action_flag == "encouraging":
+                    rospy.loginfo("Going to encouraging position")
+                    pepper_listener.encouraging_position_action(
+                rate.sleep()
+
         except KeyboardInterrupt:
             rospy.loginfo("Shutting down Pepper Listener.")
 
