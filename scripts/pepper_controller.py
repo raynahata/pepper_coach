@@ -411,19 +411,39 @@ class Pepper:
             rospy.loginfo("Shutting down Pepper Listener.")
 
 
-try:
-    print('slay queen ')
-    # Create a proxy to ALMotion
-    motion_proxy = ALProxy("ALMotion", pepper_ip, pepper_port)
-
-    # Wake up Pepper (set to stand posture)
-    motion_proxy.wakeUp()
-
+if __name__ == '__main__':
+    rospy.init_node('pepper_controller', anonymous=True)
     pepper = Pepper()
+    pepper.clear_screen()
+
     pepper.firm_position_action()
+    rospy.loginfo("Firm position executed.")
+    rospy.sleep(7)
 
-    # After finishing movements, let Pepper rest
-    motion_proxy.rest()
+    pepper.encouraging_position_action()
+    rospy.loginfo("Encouraging position executed.")
+    rospy.sleep(7)
 
-except Exception as e:
-    print("Error: ", e)
+    rospy.loginfo("Two feedback positions tested: firm and encouraging")
+
+    # try:
+    #     rospy.spin()  # Keep the node running
+    # except KeyboardInterrupt:
+    #     rospy.loginfo("Shutting down Pepper Listener.")
+
+# try:
+#     print('slay queen ')
+#     # Create a proxy to ALMotion
+#     motion_proxy = ALProxy("ALMotion", pepper_ip, pepper_port)
+#
+#     # Wake up Pepper (set to stand posture)
+#     motion_proxy.wakeUp()
+#
+#     pepper = Pepper()
+#     pepper.firm_position_action()
+#
+#     # After finishing movements, let Pepper rest
+#     motion_proxy.rest()
+#
+# except Exception as e:
+#     print("Error: ", e)
