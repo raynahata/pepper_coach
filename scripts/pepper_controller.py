@@ -9,6 +9,7 @@ from std_msgs.msg import String
 # Replace this with your Pepper's IP address
 pepper_ip = "128.237.236.27"
 pepper_port = 9559
+action_received = False
 
 
 class Pepper:
@@ -38,6 +39,7 @@ class Pepper:
         rospy.Subscriber("pepper_state", String, self.callback_state)
         rospy.Subscriber("gpt_speech", String, self.gpt_callback)
         rospy.Subscriber("exercise_command", String, self.exercise_callback)
+        self.angle_publisher = rospy.Publisher("arm_angles", String, queue_size=10)
 
         rospy.loginfo("Subscribed to /gpt_speech")
 
@@ -67,6 +69,10 @@ class Pepper:
             angles: List of angles (in radians) for the arm's joints.
             speed: Fraction of maximum speed (0.0 to 1.0).
         """
+        #publish the angles that are fed into this method
+        parsed_angles = ' '.join("" + angle for angle in angles)
+        self.angle_publisher.publish(parsed_angles)
+
         if side == "R":
             joint_names = ["RShoulderPitch", "RShoulderRoll", "RElbowYaw", "RElbowRoll", "RWristYaw"]
         elif side == "L":
@@ -413,44 +419,49 @@ class Pepper:
         self.move_arms_up_and_down()
 
     def main(self):
-        rospy.init_node('pepper_controller', anonymous=True)
-        pepper_listener = Pepper(ip="128.237.236.27", port=9559)
+        # rospy.init_node('pepper_controller', anonymous=True)
+        pepper_listener = Pepper()
         rate = rospy.Rate(10)  # 10hz
-        rospy.Subscriber("move_arm_command", String, pepper_listener.move_arm_callback)
+        # rospy.Subscriber("move_arm_command", String, pepper_listener.move_arm_callback)
 
-        try:
-            #rospy.spin()  # Keep the node running
-            while not rospy.is_shutdown():
-                if self.action_flag == "firm":
-                    rospy.loginfo("Going to firm position")
-                    pepper_listener.firm_position_action()
-                elif self.action_flag == "encouraging":
-                    rospy.loginfo("Going to encouraging position")
-                    pepper_listener.encouraging_position_action(
-                rate.sleep()
+        #rospy.spin()  # Keep the node running
+        while not rospy.is_shutdown():
+            if self.action_flag == "firm":
+                action_received = True
+                rospy.loginfo("Going to firm position")
+                pepper_listener.firm_position_action()
 
-        except KeyboardInterrupt:
-            rospy.loginfo("Shutting down Pepper Listener.")
-
+            elif self.action_flag == "encouraging":
+                action_received = True
+                rospy.loginfo("Going to encouraging position")
+                pepper_listener.encouraging_position_action()
+            else: action_received = False
+            rate.sleep()
 
 if __name__ == '__main__':
     rospy.init_node('pepper_controller', anonymous=True)
     pepper = Pepper()
-    pepper.clear_screen()
+    rospy.Subscriber("move_arm_command", String, pepper.move_arm_callback)
+    pepper.main()
 
-    pepper.firm_position_action()
-    rospy.loginfo("Firm position executed.")
-    rospy.sleep(15)
 
-    pepper.stop_exercise_motion()
-    rospy.sleep(15)
-    rospy.loginfo("Pepper returned to neutral position.")
-
-    pepper.encouraging_position_action()
-    rospy.loginfo("Encouraging position executed.")
-    rospy.sleep(15)
-
-    rospy.loginfo("Two feedback positions tested: firm and encouraging")
+    # rospy.init_node('pepper_controller', anonymous=True)
+    # pepper = Pepper()
+    # pepper.clear_screen()
+    #
+    # pepper.firm_position_action()
+    # rospy.loginfo("Firm position executed.")
+    # rospy.sleep(15)
+    #
+    # pepper.stop_exercise_motion()
+    # rospy.sleep(15)
+    # rospy.loginfo("Pepper returned to neutral position.")
+    #
+    # pepper.encouraging_position_action()
+    # rospy.loginfo("Encouraging position executed.")
+    # rospy.sleep(15)
+    #
+    # rospy.loginfo("Two feedback positions tested: firm and encouraging")
 
     # try:
     #     rospy.spin()  # Keep the node running
