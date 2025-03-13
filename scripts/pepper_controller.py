@@ -418,11 +418,15 @@ if __name__ == '__main__':
 
     pepper.firm_position_action()
     rospy.loginfo("Firm position executed.")
-    rospy.sleep(7)
+    rospy.sleep(5)
+    pepper.stop_exercise_motion()
+    rospy.sleep(3)
 
     pepper.encouraging_position_action()
     rospy.loginfo("Encouraging position executed.")
-    rospy.sleep(7)
+    rospy.sleep(5)
+    pepper.stop_exercise_motion()
+    rospy.sleep(3)
 
     rospy.loginfo("Two feedback positions tested: firm and encouraging")
 
