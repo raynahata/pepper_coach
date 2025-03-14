@@ -1,8 +1,8 @@
 angle_info:
-  - right_shoulder: [right_hip, right_shoulder, right_elbow]
-  - left_shoulder: [left_hip, left_shoulder, left_elbow]
-  - right_elbow: [right_shoulder, right_elbow, right_wrist]
-  - left_elbow: [left_shoulder, left_elbow, left_wrist]
+  right_shoulder: [right_hip, right_shoulder, right_elbow]
+  left_shoulder: [left_hip, left_shoulder, left_elbow]
+  right_elbow: [right_shoulder, right_elbow, right_wrist]
+  left_elbow: [left_shoulder, left_elbow, left_wrist]
 
 angle_order:
   right_shoulder: [0, 1, 2]

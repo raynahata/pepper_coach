@@ -5,16 +5,21 @@ from pytz import timezone
 from datetime import datetime
 import numpy as np
 from sensor_msgs.msg import Image
-from config import *
+# from config import *
 import cv2
+import yaml
+
+from rospkg import RosPack
 
 import warnings
 warnings.filterwarnings("ignore")
-from config import *
+# from config import *
 
 import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
+
+rp = RosPack()
 
 class PoseTracking:
 
@@ -26,8 +31,8 @@ class PoseTracking:
         #self.sub = rospy.Subscriber("/astra_ros/devices/default/color/image_color", Image, self.callback)
         
         #TODO: check rostopics and see pepper camera
-        self.sub = rospy.Subscriber("/pepper/camera/top/camera/image_raw", Image, self.callback)
-
+        self.sub = rospy.Subscriber("/pepper_camera/image_raw", Image, self.callback)
+        self.computer_params = self.load_params()
 
         #have a library that sets up pose estimator
         #use points on body as landmark points
@@ -35,7 +40,7 @@ class PoseTracking:
         #pose_landmarker.task is a model file, trained externally on skeletons
 
         #TODO: modify path of file
-        base_options = python.BaseOptions(model_asset_path='/home/quori4/quori_files/quori_ros/src/quori_exercises/exercise_session/pose_landmarker.task')
+        base_options = python.BaseOptions(model_asset_path=rp.get_path('pepper_exercise_coach') + "/config/pose_landmarker.task")
         options = vision.PoseLandmarkerOptions(
             base_options=base_options,
             output_segmentation_masks=False)
@@ -47,6 +52,11 @@ class PoseTracking:
         #             min_tracking_confidence=0.5,
         #             model_complexity=0,)
         self.flag = False
+    
+    def load_params(self):
+        with open(rp.get_path('pepper_exercise_coach')+"/config/computer_config.yaml", "r") as file:
+            data = yaml.safe_load(file)
+        return data
 
     def calc_angle(self, vec_0, vec_1, angle_type):
         if angle_type == 'xy':
@@ -74,12 +84,18 @@ class PoseTracking:
         #reformatting image so pose detector can understand (getting image in mumpy format)
         image = np.frombuffer(data.data, dtype=np.uint8).reshape(
             data.height, data.width, -1)
-        cv2.imwrite('test.jpg', image) 
-        image = mp.Image.create_from_file('test.jpg')
+        #create mp image from numpy input directly since it's already in rgb format
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image)
+
+        #visualize input image using cv2
+        #convert from rgb to bgr
+        # image = image[...,::-1]
+        # cv2.imwrite('test.jpg', image) 
+        # image = mp.Image.create_from_file('test.jpg')
 
         #running image through pose detector
         #detect function - gets 3d position of each of the landmarks
-        results = self.pose_detector.detect(image)
+        results = self.pose_detector.detect(mp_image)
         #results are the 3d positions of the landmarks
         if results.pose_landmarks:
             ct = datetime.now(tz)
@@ -94,10 +110,10 @@ class PoseTracking:
             angle_msg = Float64MultiArray()
             data = []
 
-            #calculating angles - see src/quori_exercises/exercise_session/config_computer.py
-            #for each joint_group (refers to the larger category), angle_description (the three other landmarks it refers to)
-            #this loop repeats 4 times, because 4 joints looking through in ANGLE_INFO
-            for joint_group, angle_description in ANGLE_INFO:
+            # calculating angles - see src/quori_exercises/exercise_session/config_computer.py
+            # for each joint_group (refers to the larger category), angle_description (the three other landmarks it refers to)
+            # this loop repeats 4 times, because 4 joints looking through in ANGLE_INFO
+            for joint_group, angle_description in self.computer_params['angle_info'].items():
                 #in all landmarks found, care about 3 things (ex; right hip, right shoulder, right elbow)
                 #for each one, find the index in the global list of landmarks (will have 3 indexes)
                 indices = [self.landmark_points.index(angle_description[i]) for i in range(3)]
@@ -117,6 +133,7 @@ class PoseTracking:
                     data.append(angle)
             
             angle_msg.data = data
+            print(data)
             angle_pub.publish(angle_msg)
 
 
@@ -125,7 +142,7 @@ if __name__ == '__main__':
     rospy.init_node('pose_tracking', anonymous=True)
     
     angle_pub = rospy.Publisher('joint_angles', Float64MultiArray, queue_size=10)
-    face_pub = rospy.Publisher('facial_features', Float64MultiArray, queue_size=10)
+    # face_pub = rospy.Publisher('facial_features', Float64MultiArray, queue_size=10) unused
     tz = timezone('EST')
 
     #Start with exercise 1, set 1
@@ -134,10 +151,3 @@ if __name__ == '__main__':
 
     pose_tracking.flag = True
     rospy.spin()
-
-    
-    
-
-
-
-
