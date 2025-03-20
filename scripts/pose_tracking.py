@@ -7,6 +7,7 @@ import numpy as np
 from sensor_msgs.msg import Image
 # from config import *
 import cv2
+from cv_bridge import CvBridge
 import yaml
 
 from rospkg import RosPack
@@ -18,8 +19,10 @@ warnings.filterwarnings("ignore")
 import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
+import matplotlib.pyplot as plt 
 
 rp = RosPack()
+bridge = CvBridge()
 
 class PoseTracking:
 
@@ -32,6 +35,7 @@ class PoseTracking:
         
         #TODO: check rostopics and see pepper camera
         self.sub = rospy.Subscriber("/pepper_camera/image_raw", Image, self.callback)
+        self.image_pub = rospy.Publisher("/annotated_image", Image, queue_size=10)
         self.computer_params = self.load_params()
 
         #have a library that sets up pose estimator
@@ -84,9 +88,10 @@ class PoseTracking:
         #reformatting image so pose detector can understand (getting image in mumpy format)
         image = np.frombuffer(data.data, dtype=np.uint8).reshape(
             data.height, data.width, -1)
+        annotated_image = image.copy()
         #create mp image from numpy input directly since it's already in rgb format
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image)
-
+        
         #visualize input image using cv2
         #convert from rgb to bgr
         # image = image[...,::-1]
@@ -101,11 +106,21 @@ class PoseTracking:
             ct = datetime.now(tz)
 
             landmarks = []
+            image_landmarks = []
 
             #iterating through names of all the landmarks, and storying xyz coordinates
             for i, landmark in enumerate(results.pose_landmarks[0]):
                 #creates a list of landmarks, and stores list of coordinates for each landmark
                 landmarks.append([landmark.x, landmark.y, landmark.z])
+                #adjust original iamge 
+                if landmark.x <= 1.0 or landmark.y <= 1.0:
+                    image_landmarks.append([int(landmark.x * image.shape[1]), int(landmark.y * image.shape[0])])
+            
+            for point in image_landmarks:
+                cv2.circle(annotated_image, point, 5, (255, 0, 0), -1)  # Red circles around landmarks
+
+            ros_image = bridge.cv2_to_imgmsg(annotated_image, encoding="bgr8")
+            self.image_pub.publish(ros_image)
 
             angle_msg = Float64MultiArray()
             data = []
@@ -133,7 +148,7 @@ class PoseTracking:
                     data.append(angle)
             
             angle_msg.data = data
-            print(data)
+            print(len(data))
             angle_pub.publish(angle_msg)
 
 
