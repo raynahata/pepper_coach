@@ -3,15 +3,19 @@ from naoqi import ALProxy
 # import matplotlib.pyplot as++ plt+
 
 import rospy
+import yaml
 import math
 import time
 from std_msgs.msg import String
 from sensor_msgs.msg import Image
+from rospkg import RosPack
 
 # Replace this with your Pepper's IP address
 pepper_ip = "128.237.236.27"
 pepper_port = 9559
 action_received = False
+
+rp = RosPack()
 
 
 class Pepper:
@@ -28,6 +32,8 @@ class Pepper:
         self.tts.setParameter("defaultVoiceSpeed", 70)
         self.tts.setParameter("pitchShift", 1)
         self.exercise_running = False
+
+        self.params = self.load_params()
         
         self.is_action_received = False
         self.is_executing_action = False
@@ -386,6 +392,9 @@ class Pepper:
         torso_angles_degrees = [-0.3, -32.6, -0.8]
         torso_angles_radians = self.degrees_to_radians(torso_angles_degrees)
 
+        neck_angles_degrees = [1.1, -16.5]
+        neck_angles_radians = self.degrees_to_radians(neck_angles_degrees)
+
         # move the right arm
         self.move_arm("R", right_arm_angles_radians, speed=0.1)
 
@@ -394,6 +403,9 @@ class Pepper:
 
         # move the torso
         self.move_torso(torso_angles_radians, speed=0.1)
+
+        # move the neck
+        self.move_neck(neck_angles_radians, speed=0.1)
 
     def neutral_position_action(self):
         """
@@ -490,16 +502,50 @@ class Pepper:
             # Publish to ROS topic
             self.image_publisher.publish(ros_image)
             # rospy.loginfo("Published a frame from Pepper.")
+
+    def execute_parsed_movements(self, part_name, radian_positions):
+        """
+        Helper function for parse_all_movements, purpose is to parse which part the movement
+        refers to and move the correct part with the according input radian positions
+        """
+        if part_name == 'right_arm_degrees':
+            self.move_arm("R", radian_positions, speed=0.1)
+        elif part_name == 'left_arm_degrees':
+            self.move_arm("L", radian_positions, speed=0.1)
+        elif part_name == 'torso_degrees':
+            self.move_torso(radian_positions, speed=0.1)
+        elif part_name == 'neck_degrees':
+            self.move_neck(radian_positions, speed=0.1)
+
+    def parse_all_movements(self, all_positions):
+        """
+        Helper function for execute_pepper_action, purpose is to parse the part name and positions of
+        the part and pass it in to execute_parsed_movements for actual executions
+        """
+        for position in all_positions:
+            part_name = position[0]
+            degree_positions = position[1]
+            radian_positions = self.degrees_to_radians(degree_positions)
+            self.execute_parsed_movements(part_name, radian_positions)
     
     def execute_pepper_action(self):
         if self.action_flag == "firm":
             rospy.loginfo("Going to firm position")
-            self.firm_position_action()
+            #self.firm_position_action()
+            all_positions = self.params['feedback_position_info']['firm_positions']
+            self.parse_all_movements(all_positions)
             self.is_executing_action = True
         elif self.action_flag == "encouraging":
             rospy.loginfo("Going to encouraging position")
-            self.encouraging_position_action()
+            #self.encouraging_position_action()
+            all_positions = self.params['feedback_position_info']['encouraging_positions']
+            self.parse_all_movements(all_positions)
             self.is_executing_action = True
+        elif self.action_flag == "neutral":
+            rospy.loginfo("Going to neutral position")
+            # self.neutral_position_action()
+            all_positions = self.params['feedback_position_info']['neutral_positions']
+            self.parse_all_movements(all_positions)
         else:
             rospy.logwarn("Action of " + str(self.action_flag) + " not implemented!")
     
@@ -508,6 +554,10 @@ class Pepper:
         self.video_service.unsubscribe(self.subscriber_id)
 
     def check_action_execution(self):
+        #clarify corresponding parts moved with param indices
+        r_arm_idx = 0
+        l_arm_idx = 1
+        degrees_idx = 1
         #define joint names
         r_joint_names = ["RShoulderPitch", "RShoulderRoll", "RElbowYaw", "RElbowRoll", "RWristYaw"]
         l_joint_names = ["LShoulderPitch", "LShoulderRoll", "LElbowYaw", "LElbowRoll", "LWristYaw"]
@@ -517,14 +567,14 @@ class Pepper:
         #check joint angles for different actions
         if self.action_flag == "firm":
             #grab left and right arm commands
-            r_arm_degrees = [66.3, -4.8, 97.8, 6.6, -1.9]
+            r_arm_degrees = self.params['feedback_position_info']['firm_positions'][r_arm_idx][degrees_idx]
             r_arm_radians = self.degrees_to_radians(r_arm_degrees)
-            l_arm_degrees = [66.3, 4.8, -97.8, -6.6, 1.9]
+            l_arm_degrees = self.params['feedback_position_info']['firm_positions'][l_arm_idx][degrees_idx]
             l_arm_radians = self.degrees_to_radians(l_arm_degrees)
         elif self.action_flag == "encouraging":
-            r_arm_degrees = [-55.1, -0.8, 97.1, 6.4, -0.8]
+            r_arm_degrees = self.params['feedback_position_info']['encouraging_positions'][r_arm_idx][degrees_idx]
             r_arm_radians = self.degrees_to_radians(r_arm_degrees)
-            l_arm_degrees = [-55.9, 4.8, -98.2, -6.4, 1.9]
+            l_arm_degrees = self.params['feedback_position_info']['encouraging_positions'][l_arm_idx][degrees_idx]
             l_arm_radians = self.degrees_to_radians(l_arm_degrees)
         #iterate through each and determine if current value close to actual
         for curr_joint_angle, cmd_joint_angle in zip(r_joint_angles, r_arm_radians):
@@ -539,6 +589,11 @@ class Pepper:
         self.is_action_received = False #only want to accept new action after current action is complete
         print("Finished executing " + str(self.action_flag) + " action")
         return False
+
+    def load_params(self):
+        with open(rp.get_path('pepper_exercise_coach') + "/config/pepper_controller_config.yaml", "r") as file:
+            data = yaml.safe_load(file)
+        return data
 
     def main(self):
         pepper_listener = Pepper()
