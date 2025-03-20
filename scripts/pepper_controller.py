@@ -1,5 +1,6 @@
 import sys
 from naoqi import ALProxy
+# import matplotlib.pyplot as++ plt+
 
 import rospy
 import math
@@ -27,6 +28,9 @@ class Pepper:
         self.tts.setParameter("defaultVoiceSpeed", 70)
         self.tts.setParameter("pitchShift", 1)
         self.exercise_running = False
+        
+        self.is_action_received = False
+        self.is_executing_action = False
 
         #initialize camera
         resolution = 2  # 640x480
@@ -97,7 +101,7 @@ class Pepper:
             rospy.logerr("Number of angles does not match the number of joints.")
             return
 
-        rospy.loginfo("Moving {} arm to angles: {}".format(side, angles))
+        # rospy.loginfo("Moving {} arm to angles: {}".format(side, angles))
         self.motion.setAngles(joint_names, angles, speed)
         # self.motion.angleInterpolation(joint_names,angles,[speed]*len(joint_names),True)
 
@@ -114,7 +118,7 @@ class Pepper:
             rospy.logerr("Number of angles does not match the number of torso joints.")
             return
 
-        rospy.loginfo("Moving torso to angles: {}".format(angles))
+        # rospy.loginfo("Moving torso to angles: {}".format(angles))
         # TODO: confirm that the joint_names below make sense
         self.motion.setAngles(joint_names, angles, speed)
 
@@ -132,6 +136,7 @@ class Pepper:
                 self.is_resting = False
                 self.current_exercise = "bicep curls"
                 self.bicep_curls()
+                print("BICEP CURLS RUNNING")
             else:
                 rospy.loginfo("Bicep curls are already running.")
 
@@ -142,6 +147,7 @@ class Pepper:
                 self.is_resting = False
                 self.current_exercise = "lateral raises"
                 self.lateral_raises()
+                print("LATERAL RAISES")
             else:
                 rospy.loginfo("Lateral raises are already running.")
 
@@ -416,12 +422,11 @@ class Pepper:
     def move_arm_callback(self, msg):
         rospy.loginfo("Received move arm command: {}".format(msg.data))
         command = msg.data.lower()
-
-        if command == "firm":
-            self.action_flag = "firm"
-
-        elif command == "encouraging":
-            self.action_flag = "encouraging"
+        if command != self.action_flag:
+            self.action_flag = command
+            self.is_action_received = True
+        else:
+            rospy.loginfo("Ignoring duplicate move arm command: {}".format(msg.data))
 
     def listener(self):
         """
@@ -450,29 +455,70 @@ class Pepper:
 
             # Publish to ROS topic
             self.image_publisher.publish(ros_image)
-            rospy.loginfo("Published a frame from Pepper.")
+            # rospy.loginfo("Published a frame from Pepper.")
+    
+    def execute_pepper_action(self):
+        if self.action_flag == "firm":
+            rospy.loginfo("Going to firm position")
+            self.firm_position_action()
+            self.is_executing_action = True
+        elif self.action_flag == "encouraging":
+            rospy.loginfo("Going to encouraging position")
+            self.encouraging_position_action()
+            self.is_executing_action = True
+        else:
+            rospy.logwarn("Action of " + str(self.action_flag) + " not implemented!")
     
     def shutdown_camera(self):
         rospy.loginfo("Shutting down Pepper camera node...")
         self.video_service.unsubscribe(self.subscriber_id)
 
+    def check_action_execution(self):
+        #define joint names
+        r_joint_names = ["RShoulderPitch", "RShoulderRoll", "RElbowYaw", "RElbowRoll", "RWristYaw"]
+        l_joint_names = ["LShoulderPitch", "LShoulderRoll", "LElbowYaw", "LElbowRoll", "LWristYaw"]
+        #grab joint angles
+        r_joint_angles = self.motion.getAngles(r_joint_names, True)
+        l_joint_angles = self.motion.getAngles(l_joint_names, True)
+        #check joint angles for different actions
+        if self.action_flag == "firm":
+            #grab left and right arm commands
+            r_arm_degrees = [66.3, -4.8, 97.8, 6.6, -1.9]
+            r_arm_radians = self.degrees_to_radians(r_arm_degrees)
+            l_arm_degrees = [66.3, 4.8, -97.8, -6.6, 1.9]
+            l_arm_radians = self.degrees_to_radians(l_arm_degrees)
+        elif self.action_flag == "encouraging":
+            r_arm_degrees = [-55.1, -0.8, 97.1, 6.4, -0.8]
+            r_arm_radians = self.degrees_to_radians(r_arm_degrees)
+            l_arm_degrees = [-55.9, 4.8, -98.2, -6.4, 1.9]
+            l_arm_radians = self.degrees_to_radians(l_arm_degrees)
+        #iterate through each and determine if current value close to actual
+        for curr_joint_angle, cmd_joint_angle in zip(r_joint_angles, r_arm_radians):
+            if abs(curr_joint_angle - cmd_joint_angle) > 0.05:
+                self.is_executing_action = True
+                return True
+        for curr_joint_angle, cmd_joint_angle in zip(l_joint_angles, l_arm_radians):
+            if abs(curr_joint_angle - cmd_joint_angle) > 0.05:
+                self.is_executing_action = True
+                return True
+        self.is_executing_action = False
+        self.is_action_received = False #only want to accept new action after current action is complete
+        print("Finished executing " + str(self.action_flag) + " action")
+        return False
+
     def main(self):
         pepper_listener = Pepper()
-        rate = rospy.Rate(10)  # 10hz
+        rate = rospy.Rate(5)  # 10hz
         # rospy.Subscriber("move_arm_command", String, pepper_listener.move_arm_callback)
-
-        #rospy.spin()  # Keep the node running
         while not rospy.is_shutdown():
-            if self.action_flag == "firm":
-                action_received = True
-                rospy.loginfo("Going to firm position")
-                pepper_listener.firm_position_action()
 
-            if self.action_flag == "encouraging":
-                action_received = True
-                rospy.loginfo("Going to encouraging position")
-                pepper_listener.encouraging_position_action()
-            
+            #execute actions
+            if self.is_executing_action:
+                self.check_action_execution()
+            elif self.is_action_received:
+                self.execute_pepper_action()
+                
+            #publish camera image
             self.pub_image()
 
             rate.sleep()
@@ -484,44 +530,3 @@ if __name__ == '__main__':
     pepper = Pepper()
     rospy.Subscriber("move_arm_command", String, pepper.move_arm_callback)
     pepper.main()
-
-
-    # rospy.init_node('pepper_controller', anonymous=True)
-    # pepper = Pepper()
-    # pepper.clear_screen()
-    #
-    # pepper.firm_position_action()
-    # rospy.loginfo("Firm position executed.")
-    # rospy.sleep(15)
-    #
-    # pepper.stop_exercise_motion()
-    # rospy.sleep(15)
-    # rospy.loginfo("Pepper returned to neutral position.")
-    #
-    # pepper.encouraging_position_action()
-    # rospy.loginfo("Encouraging position executed.")
-    # rospy.sleep(15)
-    #
-    # rospy.loginfo("Two feedback positions tested: firm and encouraging")
-
-    # try:
-    #     rospy.spin()  # Keep the node running
-    # except KeyboardInterrupt:
-    #     rospy.loginfo("Shutting down Pepper Listener.")
-
-# try:
-#     print('slay queen ')
-#     # Create a proxy to ALMotion
-#     motion_proxy = ALProxy("ALMotion", pepper_ip, pepper_port)
-#
-#     # Wake up Pepper (set to stand posture)
-#     motion_proxy.wakeUp()
-#
-#     pepper = Pepper()
-#     pepper.firm_position_action()
-#
-#     # After finishing movements, let Pepper rest
-#     motion_proxy.rest()
-#
-# except Exception as e:
-#     print("Error: ", e)
