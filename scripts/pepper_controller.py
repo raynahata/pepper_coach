@@ -105,6 +105,20 @@ class Pepper:
         self.motion.setAngles(joint_names, angles, speed)
         # self.motion.angleInterpolation(joint_names,angles,[speed]*len(joint_names),True)
 
+    ### Function to Move Neck ###
+    def move_neck(self, angles, speed=0.2):
+        """
+        Moves Pepper's torso to the specified angles
+        Args:
+            angles: List of angles (in radians) for the neck joints
+            speed: Fraction of the maximum speed (0.0 to 1.0)
+        """
+        joint_names = ["HeadYaw", "HeadPitch"]
+        if len(angles) != len(joint_names):
+            rospy.logerr("Number of angles does not match the number of neck joints.")
+            return
+        self.motion.setAngles(joint_names, angles, speed)
+
     ### Function to Move Torso ###
     def move_torso(self, angles, speed=0.2):
         """
@@ -119,7 +133,6 @@ class Pepper:
             return
 
         # rospy.loginfo("Moving torso to angles: {}".format(angles))
-        # TODO: confirm that the joint_names below make sense
         self.motion.setAngles(joint_names, angles, speed)
 
     def exercise_callback(self, msg):
@@ -359,10 +372,6 @@ class Pepper:
     def firm_position_action(self):
         """
         Pepper leans forward and arms forward toward the side at a low speed
-
-        //TODO: remove this when you're done (note to self below)
-            joint_names = ["RShoulderPitch", "RShoulderRoll", "RElbowYaw", "RElbowRoll", "RWristYaw"]
-            joint_names = ["LShoulderPitch", "LShoulderRoll", "LElbowYaw", "LElbowRoll", "LWristYaw"]
         """
 
         # Right arm angles in degrees (arm forward toward the side)
@@ -388,10 +397,35 @@ class Pepper:
 
     def neutral_position_action(self):
         """
-        Pepper has torso straight, arm positions move in somewhat random motion
-        //TODO: implement this. For now, just do a completely neutral position (no random movements)
+        Pepper has torso straight, arm positions to the side
         """
-        return True
+        #Right arm angles in degrees (arms to the side)
+        right_arm_angles_degrees = [99.1, -6.1, 97.0, 5.6, -1.9]
+        right_arm_angles_radians = self.degrees_to_radians(right_arm_angles_degrees)
+
+        # Left arm angles in degrees (arm to the side)
+        left_arm_angles_degrees = [99.1, 6.1, -97.0, -5.6, 1.9]
+        left_arm_angles_radians = self.degrees_to_radians(left_arm_angles_degrees)
+
+        # torso angles in degrees (neutral)
+        torso_angles_degrees = [-0.6, -2.2, -0.6]
+        torso_angles_radians = self.degrees_to_radians(torso_angles_degrees)
+
+        # neck angles in degrees (ensure that Pepper's neck is upright for pose tracking)
+        neck_angles_degrees = [1.1, -19.4]
+        neck_angles_radians = self.degrees_to_radians(neck_angles_degrees)
+
+        # move the right arm
+        self.move_arm("R", right_arm_angles_radians, speed=0.1)
+
+        # move the left arm
+        self.move_arm("L", left_arm_angles_radians, speed=0.1)
+
+        # move the torso
+        self.move_torso(torso_angles_radians, speed=0.1)
+
+        # move the neck
+        self.move_neck(neck_angles_radians, speed=0.1)
 
     def encouraging_position_action(self):
         """
