@@ -17,7 +17,7 @@ from rospkg import RosPack
 from std_msgs.msg import Int32
 
 #package imports
-from exercise_controller import ExerciseController
+from exercise_manager import ExerciseManager
 
 #params TOOD: move these to yaml file
 SET_LENGTH = 20
@@ -60,7 +60,7 @@ class StudySession:
         heart_rate_sub = rospy.Subscriber("/heart_rate", Int32, self.intake_heart_rate_callback, queue_size=3000)
 
         #init controller
-        controller = ExerciseController(False, self.log_filename, ROBOT_STYLE, RESTING_HR, MAX_HR, PARTICIPANT_ID)
+        controller = ExerciseManager(False, self.log_filename, ROBOT_STYLE, RESTING_HR, MAX_HR, PARTICIPANT_ID)
         rospy.sleep(5)
 
         #Note from refactor: no round 0. All rounds should be > 0

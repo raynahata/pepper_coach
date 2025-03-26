@@ -24,7 +24,7 @@ from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 rp = RosPack()
 np.set_printoptions(suppress=True)
 
-class ExerciseController:
+class ExerciseManager:
     def __init__(self, replay, log_filename, style, resting_hr, max_hr, user_id):
         #Set initial parameters
         self.replay = replay
@@ -36,7 +36,7 @@ class ExerciseController:
         self.resting_hr = resting_hr
         self.max_hr = max_hr
         self.joint_comparison_idx = []
-        self.computer_params = self.load_params()
+        self.exercise_params = self.load_params()
         #Create data storage
         self.curr_set = ""
         self.curr_exercise = ""
@@ -73,9 +73,9 @@ class ExerciseController:
             self.robot_style = 3
         else:
             self.robot_style = robot_style
-        self.neutral_expression = self.computer_params['neutral_expressions'][self.robot_style]
-        self.neutral_posture = self.computer_params['neutral_postures'][self.robot_style]
-        self.start_set_smile = self.computer_params['start_set_smile'][self.robot_style]
+        self.neutral_expression = self.exercise_params['neutral_expressions'][self.robot_style]
+        self.neutral_posture = self.exercise_params['neutral_postures'][self.robot_style]
+        self.start_set_smile = self.exercise_params['start_set_smile'][self.robot_style]
         if robot_style == 5: #adaptive
             self.adaptive = True
             ##TODO: test this with Rayna
@@ -125,8 +125,8 @@ class ExerciseController:
             for idx in range(len(next_joint_angles))]
         
         #grab values from config for exercise
-        exercise_min = self.computer_params['exercise_info'][self.curr_exercise]['current_angles_min']
-        exercise_grad = self.computer_params['exercise_info'][self.curr_exercise]['max_grad']
+        exercise_min = self.exercise_params['exercise_info'][self.curr_exercise]['current_angles_min']
+        exercise_grad = self.exercise_params['exercise_info'][self.curr_exercise]['max_grad']
 
         #check for change in slope across prev and next 
         for prev_deriv, next_deriv in zip(prev_joint_deriv, next_joint_deriv):
@@ -237,16 +237,16 @@ class ExerciseController:
         self.set_data_dict[self.curr_set]['peaks'] = []
         #specify angles to compare for pose callback
         self.set_data_dict[self.curr_set]['angle_compare_idx'] = []
-        for group, ind in self.computer_params['exercise_info'][exercise_name]['segmenting_joints']:
+        for group, ind in self.exercise_params['exercise_info'][exercise_name]['segmenting_joints']:
             self.set_data_dict[self.curr_set]['angle_compare_idx'].append(
-                self.computer_params['angle_order'][group][ind]
+                self.exercise_params['angle_order'][group][ind]
             )
 
-        # dummy_angle_data = np.zeros((0,len(self.computer_params['angle_info'])*3))
+        # dummy_angle_data = np.zeros((0,len(self.exercise_params['angle_info'])*3))
         # self.angles.append(dummy_angle_data)
         # self.heart_rates.append([])
         # self.hrr.append([])
-        # self.performance.append(np.empty((0, len(self.computer_params['exercise_info'][exercise_name]['comparison_joints']))))
+        # self.performance.append(np.empty((0, len(self.exercise_params['exercise_info'][exercise_name]['comparison_joints']))))
         # self.peaks.append([])
         # self.feedback.append([])
         # self.times.append([])
@@ -278,9 +278,9 @@ class ExerciseController:
 #     MAX_HR = 220-26
 #     LOG_FILENAME = "test.pickle"
 
-#     rospy.init_node('exercise_controller_node')
+#     rospy.init_node('exercise_manager_node')
 
-#     controller = ExerciseController(False, LOG_FILENAME, ROBOT_STYLE, RESTING_HR, MAX_HR, PARTICIPANT_ID)
+#     controller = ExerciseManager(False, LOG_FILENAME, ROBOT_STYLE, RESTING_HR, MAX_HR, PARTICIPANT_ID)
 #     rospy.sleep(2.0)
 
 #     controller.start_new_set(exercise_name='bicep_curls',set_num=1, tot_sets=1)
