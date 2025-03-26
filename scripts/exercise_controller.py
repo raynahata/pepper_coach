@@ -22,6 +22,7 @@ from std_msgs.msg import Float64MultiArray, String, Int32
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
 rp = RosPack()
+np.set_printoptions(suppress=True)
 
 class ExerciseController:
     def __init__(self, replay, log_filename, style, resting_hr, max_hr, user_id):
@@ -34,8 +35,12 @@ class ExerciseController:
         self.slope = 0.31077594
         self.resting_hr = resting_hr
         self.max_hr = max_hr
+        self.joint_comparison_idx = []
         self.computer_params = self.load_params()
         #Create data storage
+        self.curr_set = ""
+        self.curr_exercise = ""
+        self.set_data_dict = dict()
         self.angles, self.heart_rates, self.hrr, self.all_heart_rates = [], [], [], [0]
         self.performance, self.peaks, self.feedback, self.times  = [], [], [], []
         self.current_exercise, self.exercise_name_list = '', []
@@ -82,106 +87,74 @@ class ExerciseController:
         self.all_heart_rates.append(hr_message.data)
     
     def pose_callback(self, angle_message):
-        if len(self.angles) == 0 or len(self.peaks) == 0 or not self.flag:
+        if self.curr_set == '':
+            return
+        
+        #grab data from message
+        next_joint_angles = list(angle_message.data)
+        next_timestamp = rospy.Time.now().to_sec()
+
+        #write data to file
+        next_timestamp_joint_angles = next_joint_angles.copy()
+        next_timestamp_joint_angles.append(next_timestamp)
+
+        #check if we have enough data to use for comparison
+        if len(self.set_data_dict[self.curr_set]['joint_angles']) < 2:
+            self.set_data_dict[self.curr_set]['joint_angles'].append(next_timestamp_joint_angles)
             return
 
-        #Read angle from message
-        callback_data = angle_message.data
-        callback_data = np.array(callback_data)
-        angle = callback_data[:-1]
-        self.angles[-1] = np.vstack((self.angles[-1], np.array(angle)))
+        #grab joint data from current (most recent) and previous timestamp
+        curr_timestamp_joint_angles = self.set_data_dict[self.curr_set]['joint_angles'][-1]
+        prev_timestamp_joint_angles = self.set_data_dict[self.curr_set]['joint_angles'][-2]
 
-        #Save heart rate and hrr
-        self.heart_rates[-1].append(self.all_heart_rates[-1])
-        hrr = (self.all_heart_rates[-1] - self.resting_hr) / float(self.max_hr - self.resting_hr)
-        self.hrr[-1].append(hrr)
+        #grab relevant angles we want to compare
+        joint_compare_idx = self.set_data_dict[self.curr_set]['angle_compare_idx']
+        prev_joint_angles = [prev_timestamp_joint_angles[idx] for idx in joint_compare_idx]
+        curr_joint_angles = [curr_timestamp_joint_angles[idx] for idx in joint_compare_idx]
+        next_joint_angles = [next_timestamp_joint_angles[idx] for idx in joint_compare_idx]
+        #grab timestamps we want to compare
+        prev_timestamp = prev_timestamp_joint_angles[-1]
+        curr_timestamp = curr_timestamp_joint_angles[-1]
+        next_timestamp = next_timestamp_joint_angles[-1]
 
-        #Save the time of the message
-        current_time = callback_data[-1]
-        self.times[-1].append(current_time)
+        # #calculate slope between prev and curr timestamps
+        prev_joint_deriv = [(curr_joint_angles[idx] - prev_joint_angles[idx]) / (curr_timestamp - prev_timestamp)
+            for idx in range(len(prev_joint_angles))]
+        #calculate slopes between curr and next timestamps
+        next_joint_deriv = [(curr_joint_angles[idx] - next_joint_angles[idx]) / (curr_timestamp - next_timestamp)
+            for idx in range(len(next_joint_angles))]
+        
+        #grab values from config for exercise
+        exercise_min = self.computer_params['exercise_info'][self.curr_exercise]['current_angles_min']
+        exercise_grad = self.computer_params['exercise_info'][self.curr_exercise]['max_grad']
 
-        #Get time of last peak and time of last angle
-        last_peak_time = (self.times[-1][self.peaks[-1][-1]] if len(self.peaks[-1]) > 0 else 0) - self.times[-1][0]
-        last_angle_time = current_time - self.times[-1][0]
-
-        #Look for new peaks after 1 second and every 5 angles
-        if last_angle_time > 1 and self.angles[-1].shape[0] % 5:
-            # print('Condition 1: Last Peak Time {}, Last Angle Time {}'.format(last_peak_time, last_angle_time))
-
-            #Check if far enough away from previous peak
-            if len(self.peaks[-1]) == 0 or (last_peak_time + 0.75 < last_angle_time):
-                curr_exercise_info = self.computer_params['exercise_info'][self.current_exercise]
-                
-                #Interval to check for peaks
-                to_check_amount = 10
-                to_check_times = self.times[-1][-to_check_amount:] - np.array(self.times[-1][0])
-
-                #Calculate maxes and mins in that interval
-                current_angles_min = np.min(self.angles[-1][-to_check_amount:,:][:,curr_exercise_info['segmenting_joint_inds']])
-                current_angles_max = np.max(self.angles[-1][-to_check_amount:,:][:,curr_exercise_info['segmenting_joint_inds']])
-
-                #Calculate max gradients in interval
-                grad = []
-                for index in curr_exercise_info['segmenting_joint_inds']:
-                    grad.append(np.max(np.gradient(self.angles[-1][-to_check_amount:,][:,index], to_check_times)))
-                
-                #Calculate max gradient
-                max_grad = np.max(grad)
-                max_val_pos = np.argmax(self.angles[-1][-to_check_amount:,:][:,curr_exercise_info['segmenting_joint_inds']])
-                min_val_pos = np.argmin(self.angles[-1][-to_check_amount:,:][:,curr_exercise_info['segmenting_joint_inds']])
-
-                # print('Condition 2: Shape {}, Current Min {}, Current Max {}, Max Grad {}'.format(self.angles[-1].shape[0], current_angles_min, current_angles_max, max_grad))
-                peak_to_add = None
-                
-                if current_angles_min < curr_exercise_info['current_angles_min'] and max_grad > curr_exercise_info['max_grad']:
-                    
-                    peak_candidate = self.angles[-1].shape[0]-to_check_amount+min_val_pos-1
-
-                    peak_candidate = np.min([self.angles[-1].shape[0]-1, peak_candidate])
-                    
-                    peak_candidate_time = self.times[-1][peak_candidate] - self.times[-1][0]
-
-                    #Make sure peak candidate is not too close to previous peak and that a max has been reached between previous peak and current candidate
-                    if len(self.peaks[-1]) == 0 or (last_peak_time + 0.75 < peak_candidate_time and np.max(self.angles[-1][self.peaks[-1][-1]:peak_candidate,:][:,curr_exercise_info['segmenting_joint_inds']]) > curr_exercise_info['max_in_range']):
-                        # print('Condition 3: Peak Candidate {}, Peak Candidate Time {}'.format(peak_candidate, peak_candidate_time))
-                        if self.current_exercise == 'bicep_curls':
-                            if np.min(self.angles[-1][:,curr_exercise_info['segmenting_joint_inds']][peak_candidate,:]) > 100:
-                                peak_to_add = peak_candidate
-                        
-                        if self.current_exercise == 'lateral_raises':
-                            if np.max(self.angles[-1][:,curr_exercise_info['segmenting_joint_inds']][peak_candidate,:]) < 40:
-                                peak_to_add = peak_candidate
-
-                if peak_to_add:
-
-                    self.peaks[-1].append(peak_candidate)
-                            
-                    self.logger.info('---Peak detected - {}'.format(self.peaks[-1][-1]))
-
-                    #Evaluate new rep
-                    if len(self.peaks[-1]) > 1:
-                        rep_duration = (self.times[-1][self.peaks[-1][-1]] - self.times[-1][self.peaks[-1][-2]])
-                        start = time.time()
-                        self.evaluate_rep(self.peaks[-1][-2], self.peaks[-1][-1], rep_duration)
-                        end = time.time()
-                        self.logger.info('Evaluation took {} seconds'.format(np.round(end-start, 1)))
-
-        else:
-            #Check if no movement in the last few seconds
-            if last_angle_time > 10:
-                min_in_range = np.min(self.angles[-1][-30:,:][:,curr_exercise_info['segmenting_joint_inds'][0]])
-                max_in_range = np.max(self.angles[-1][-30:,:][:,curr_exercise_info['segmenting_joint_inds'][0]])
-                
-                if (max_in_range - min_in_range) < 10:
-                    #Get style specific message
-                    _, m = self.get_message(['no movement'])
-                    self.message(m, priority=1)
-                
-                #If peaks are too far apart, say something as a filler
-                elif (len(self.peaks[-1]) == 0 and last_angle_time > 10) or (last_angle_time - last_peak_time > 15):
-                    #Get style specific message
-                    _, m = self.get_message(['peaks far apart'])
-                    self.message(m, priority=1)
+        #check for change in slope across prev and next 
+        for prev_deriv, next_deriv in zip(prev_joint_deriv, next_joint_deriv):
+            #exclude noise in slope measurements
+            if abs(prev_deriv) < 5 and abs(next_deriv) < 5:
+                continue
+            #check if we're at a peak
+            is_peak = True if (prev_deriv * next_deriv) < 0 else False
+            #check if arms are raised
+            is_arm_raised = True if (prev_deriv) > exercise_grad else False #also next grad?
+            #check if min joint angle reached
+            is_min_angle_reached = True if np.min(prev_joint_angles) < exercise_min or \
+                np.min(curr_joint_angles) < exercise_min or np.min(next_joint_angles) < exercise_min else False
+            #ensure that we don't have duplicate readings
+            if len(self.set_data_dict[self.curr_set]['peaks']) > 0:
+                timestamp_threshold = 1.0 #atleast 1 second between subsequent measurements
+                prev_peak_timestamp = self.set_data_dict[self.curr_set]['peaks'][-1]
+                delta_timestep = curr_timestamp - prev_peak_timestamp
+                is_new_peak = True if (delta_timestep > timestamp_threshold) else False
+            else:
+                delta_timestep = -1
+                is_new_peak = True
+            #combine conditional statements
+            if is_peak and is_arm_raised and is_min_angle_reached and is_new_peak:
+                print("NEW PEAK DETECTED", prev_deriv, delta_timestep)
+                self.set_data_dict[self.curr_set]['peaks'].append(curr_timestamp)
+        #append current data to dictionary
+        self.set_data_dict[self.curr_set]['joint_angles'].append(next_timestamp_joint_angles)
 
     def init_pubs_subs(self):
         if not self.replay:
@@ -253,18 +226,34 @@ class ExerciseController:
         self.send_body(positions[start], positions[end], 4)
 
     def start_new_set(self, exercise_name, set_num, tot_sets):
-        #Update data storage
-        self.angles.append(np.empty((0, len(self.computer_params['angle_info'])*3)))
-        self.heart_rates.append([])
-        self.hrr.append([])
-        self.performance.append(np.empty((0, len(self.computer_params['exercise_info'][exercise_name]['comparison_joints']))))
-        self.peaks.append([])
-        self.feedback.append([])
-        self.times.append([])
-        self.current_exercise = exercise_name
-        self.exercise_name_list.append(exercise_name)
-        self.eval_case_log.append([])
-        self.speed_case_log.append([])
+        self.curr_set = 'set_'+str(set_num)
+        self.curr_exercise = exercise_name
+        #initialize new set in dictionary
+        self.set_data_dict[self.curr_set] = dict()
+        self.set_data_dict[self.curr_set]['joint_angles'] = []
+        #add exercise name to dictionary
+        self.set_data_dict[self.curr_set]['exercise_name'] = exercise_name
+        #add peaks list to dictionary
+        self.set_data_dict[self.curr_set]['peaks'] = []
+        #specify angles to compare for pose callback
+        self.set_data_dict[self.curr_set]['angle_compare_idx'] = []
+        for group, ind in self.computer_params['exercise_info'][exercise_name]['segmenting_joints']:
+            self.set_data_dict[self.curr_set]['angle_compare_idx'].append(
+                self.computer_params['angle_order'][group][ind]
+            )
+
+        # dummy_angle_data = np.zeros((0,len(self.computer_params['angle_info'])*3))
+        # self.angles.append(dummy_angle_data)
+        # self.heart_rates.append([])
+        # self.hrr.append([])
+        # self.performance.append(np.empty((0, len(self.computer_params['exercise_info'][exercise_name]['comparison_joints']))))
+        # self.peaks.append([])
+        # self.feedback.append([])
+        # self.times.append([])
+        # self.current_exercise = exercise_name
+        # self.exercise_name_list.append(exercise_name)
+        # self.eval_case_log.append([])
+        # self.speed_case_log.append([])
 
         #Raise arm all the way up
         self.move_right_arm('up', 'halfway')
@@ -278,3 +267,23 @@ class ExerciseController:
         robot_message = "Get ready to start set %s of %s. You will be doing %s." % (set_num, tot_sets, exercise_name.replace("_", " " ))
         self.message(robot_message)
         # self.change_expression('smile', self.start_set_smile, 4) ##TODO: change to smile based command for pepper robot
+
+
+##MAIN FUNCTION FOR STANDALONE EXERCISE CONTROLLER
+# if __name__ == '__main__':
+    
+#     PARTICIPANT_ID = '0'
+#     ROBOT_STYLE = 5 #1 is firm, 3 is encouraging, 5 is adaptive
+#     RESTING_HR = 97
+#     MAX_HR = 220-26
+#     LOG_FILENAME = "test.pickle"
+
+#     rospy.init_node('exercise_controller_node')
+
+#     controller = ExerciseController(False, LOG_FILENAME, ROBOT_STYLE, RESTING_HR, MAX_HR, PARTICIPANT_ID)
+#     rospy.sleep(2.0)
+
+#     controller.start_new_set(exercise_name='bicep_curls',set_num=1, tot_sets=1)
+
+#     rospy.spin()
+
