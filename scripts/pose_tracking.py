@@ -148,7 +148,7 @@ class PoseTracking:
                     data.append(angle)
             
             angle_msg.data = data
-            print(len(data))
+            # print(len(data))
             angle_pub.publish(angle_msg)
 
 
