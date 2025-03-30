@@ -528,7 +528,7 @@ class ExerciseManager:
         #If we reacted, then we leave the action choice as is
         if returned:
             pass
-            self.logger.info('Robot said the message')
+            # self.logger.info('Robot said the message')
         elif self.adaptive:
             #Go back to the previous action chocie, since we did not use the new one
             self.logger.info('Robot did not say the message, going back to previous action choice of {}'.format(previous_action_choice))
