@@ -58,6 +58,8 @@ class Pepper:
 
         rospy.Subscriber("pepper_state", String, self.callback_state, queue_size=1)
         rospy.Subscriber("pepper_text_request", String, self.pepper_speech_callback)
+        rospy.Subscriber("pepper_action_request", String, self.pepper_action_callback)
+
 
 
         rospy.loginfo("Subscribed to /gpt_speech")
@@ -150,7 +152,7 @@ class Pepper:
             rospy.loginfo("Saying: {}".format(text))
             self.tts.say(text)
             self.curr_message = text
-        print("CURR MESSAGE:", self.curr_message)
+        # print("CURR MESSAGE:", self.curr_message)
 
     def pepper_speech_callback(self, text):
         
@@ -205,7 +207,7 @@ class Pepper:
         self.motion.setStiffnesses("Body", 0.0)
 
     ### Begin code for Pepper's movements in response to rating/movement ###
-    def move_arm_callback(self, msg):
+    def pepper_action_callback(self, msg):
         rospy.loginfo("Received move arm command: {}".format(msg.data))
         command = msg.data.lower()
         if command != self.action_flag:
@@ -373,5 +375,4 @@ class Pepper:
 if __name__ == '__main__':
     rospy.init_node('pepper_controller', anonymous=True)
     pepper = Pepper()
-    rospy.Subscriber("move_arm_command", String, pepper.move_arm_callback)
     pepper.main()

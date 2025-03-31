@@ -61,6 +61,11 @@ class ExerciseManager:
         self.logger.addHandler(ch)
         # Robot style 0 - very firm, 1 - firm, 2 - neutral, 3 - encouraging, 4 - very encouraging
         self.update_robot_style(style)
+        if style == 5: #adaptive
+            self.adaptive = True
+            self.process = subprocess.Popen(['python3.9', '-u', rp.get_path('pepper_exercise_coach') + '/scripts/adaptive_controller.py'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+        else:
+            self.adaptive = False
         self.init_pubs_subs()
         
     def load_params(self):
@@ -100,12 +105,6 @@ class ExerciseManager:
         self.neutral_expression = self.exercise_params['neutral_expressions'][self.robot_style]
         self.neutral_posture = self.exercise_params['neutral_postures'][self.robot_style]
         self.start_set_smile = self.exercise_params['start_set_smile'][self.robot_style]
-        if robot_style == 5: #adaptive
-            self.adaptive = True
-            self.process = subprocess.Popen(['python3.9', '-u', rp.get_path('pepper_exercise_coach') + '/scripts/adaptive_controller.py'], 
-                stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
-        else:
-            self.adaptive = False
         
     def heart_rate_callback(self, hr_message):
         if self.curr_set != '':
@@ -381,56 +380,28 @@ class ExerciseManager:
         return -1, ''
     
     def react_nonverbal(self, value):
-
+        #define action for pepper
         if value == 'neutral':
-            print("neutral non verbal reaction")
-            a = -0.1
-            b = 0.1
-            start_position = (self.neutral_posture + (b-a) * np.random.random_sample((5,)) + a).tolist()
-            end_position = (self.neutral_posture + (b-a) * np.random.random_sample((5,)) + a).tolist()
-            ##TODO: update with pepper expression
-            # self.send_body(start_position, end_position, 2)
-
+            #assume positive neutral action
+            pepper_action = 'positive_neutral'
         elif value == 'positive':
-            print("positive nonverbal reaction")
-            end_arm = [0, -0.8]
-            start_position = [end_arm[0], end_arm[1], end_arm[0], end_arm[1], self.exercise_params['nonverbal_react']['positive']['torso'][self.robot_style]]
-            ##TODO: update with pepper expression
-            # self.send_body(start_position, self.neutral_posture, 4)
-
+            if self.robot_style == 0 or self.robot_style == 1:
+                pepper_action = 'positive_firm'
+            elif self.robot_style == 2:
+                pepper_action = 'positive_neutral'
+            elif self.robot_style == 3 or self.robot_style == 4:
+                pepper_action = 'positive_encouraging'
         elif value == 'negative':
-            print("negative nonverbal reaction")
-            start_position = self.neutral_posture
-            start_position[-1] = self.exercise_params['nonverbal_react']['negative']['torso'][self.robot_style]
-            ##TODO: update with pepper expression
-            # self.send_body(start_position, self.neutral_posture, 4)
+            if self.robot_style == 0 or self.robot_style == 1:
+                pepper_action = 'negative_firm'
+            elif self.robot_style == 2:
+                pepper_action = 'negative_neutral'
+            elif self.robot_style == 3 or self.robot_style == 4:
+                pepper_action = 'negative_encouraging'
+        #send to pepper robot
+        print("NONVERBAL REACTION:", pepper_action, value, self.robot_style)
+        self.pepper_action_pub.publish(pepper_action)
 
-    def nonverbal_case(self, feedback, c):
-        if c == '':
-            if np.min(feedback[-1]['evaluation']) >= 0:
-                if self.nonverbal_cadence == 3:
-                    self.react_nonverbal('positive')
-                elif self.nonverbal_cadence == 2 and np.random.random_sample() < 0.5:
-                    self.react_nonverbal('positive')
-                elif self.nonverbal_cadence == 1 and np.random.random_sample() < 0.25:
-                    self.react_nonverbal('positive')
-                else:
-                    self.react_nonverbal('neutral')
-            else:
-                if self.nonverbal_cadence == 3:
-                    self.react_nonverbal('negative')
-                elif self.nonverbal_cadence == 2 and np.random.random_sample() < 0.5:
-                    self.react_nonverbal('negative')
-                elif self.nonverbal_cadence == 1 and np.random.random_sample() < 0.25:
-                    self.react_nonverbal('negative')
-                else:
-                    self.react_nonverbal('neutral')        
-        else:
-            if 'good' in c or 'corrected' in c:
-                self.react_nonverbal('positive')
-            else:
-                self.react_nonverbal('negative')
-    
     def nonverbal_case(self, feedback, c):
         if c == '':
             if np.min(feedback[-1]['evaluation']) >= 0:
@@ -543,13 +514,13 @@ class ExerciseManager:
         #We need to train as well
         if self.adaptive:
             #We train on context_i-1, action_i-1, reward_i
-            if len(self.contexts) == 1:
+            if len(self.set_data_dict[self.curr_set]['contexts']) == 1:
                 training_context = 0
                 training_action = 1
             else:
-                training_context = self.contexts[-2]
-                training_action = self.actions[-2]
-            training_reward = self.rewards[-1]
+                training_context = self.set_data_dict[self.curr_set]['contexts'][-2]
+                training_action = self.set_data_dict[self.curr_set]['actions'][-2]
+            training_reward = self.set_data_dict[self.curr_set]['rewards'][-1]
             self.logger.info('Training on Context {}, Action {}, Reward {}'.format(training_context, training_action, training_reward))
             try:
                 self.process.stdin.write(f"{training_context},{training_action},{training_reward}\n")
@@ -727,6 +698,7 @@ class ExerciseManager:
             self.movement_pub = rospy.Publisher('quori/joint_trajectory_controller/command', JointTrajectory, queue_size=10)
             self.emotion_pub = rospy.Publisher('quori/face_generator_emotion', Float64MultiArray, queue_size=10)
             self.pepper_speech_pub = rospy.Publisher("/pepper_text_request", String, queue_size=10)
+            self.pepper_action_pub = rospy.Publisher("/pepper_action_request", String, queue_size=10)
             #subscribers
             self.heart_rate_sub = rospy.Subscriber("/heart_rate", Int32, self.heart_rate_callback, queue_size=3000)
             self.pose_sub = rospy.Subscriber("/joint_angles", Float64MultiArray, self.pose_callback, queue_size=3000)

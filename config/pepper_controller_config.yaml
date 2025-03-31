@@ -3,17 +3,17 @@ feedback_position_info:
   - ['right_arm_degrees', [-55.1, -0.8, 97.1, 6.4, -0.8]]
   - ['left_arm_degrees', [-55.9, 4.8, -98.2, -6.4, 1.9]]
   - ['torso_degrees', [1.5, 1.0, -0.6]]
-  - ['neck_degrees', [1.1, -19.4]]
+  - ['neck_degrees', [1.1, 6.0]]
   positive_neutral:
   - ['right_arm_degrees', [99.1, -6.1, 97.0, 5.6, -1.9]]
   - ['left_arm_degrees', [99.1, 6.1, -97.0, -5.6, 1.9]]
   - ['torso_degrees', [-0.6, -2.2, -0.6]]
-  - ['neck_degrees', [1.1, -19.4]]
+  - ['neck_degrees', [1.1, 6.0]]
   positive_encouraging:
   - ['right_arm_degrees', [-55.1, -0.8, 97.1, 6.4, -0.8]]
   - ['left_arm_degrees', [-55.9, 4.8, -98.2, -6.4, 1.9]]
   - ['torso_degrees', [1.5, 15.0, -0.6]]
-  - ['neck_degrees', [1.1, -19.4]]
+  - ['neck_degrees', [1.1, 6.0]]
   negative_firm:
   - ['right_arm_degrees', [66.3, -4.8, 97.8, 6.6, -1.9]]
   - ['left_arm_degrees', [66.3, 4.8, -97.8, -6.6, 1.9]]
