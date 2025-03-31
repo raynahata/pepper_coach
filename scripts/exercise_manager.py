@@ -46,6 +46,7 @@ class ExerciseManager:
         self.curr_set = ""
         self.curr_exercise = ""
         self.set_data_dict = dict()
+        self.last_pepper_message_timestep = rospy.Time(0)
         #initialize logging
         self.logger = logging.getLogger('logging')
         self.logger.setLevel(logging.DEBUG)
@@ -723,28 +724,33 @@ class ExerciseManager:
     def init_pubs_subs(self):
         if not self.replay:
             #publishers
-            self.sound_pub = rospy.Publisher("quori_sound", String, queue_size=10)
             self.movement_pub = rospy.Publisher('quori/joint_trajectory_controller/command', JointTrajectory, queue_size=10)
             self.emotion_pub = rospy.Publisher('quori/face_generator_emotion', Float64MultiArray, queue_size=10)
+            self.pepper_speech_pub = rospy.Publisher("/pepper_text_request", String, queue_size=10)
             #subscribers
             self.heart_rate_sub = rospy.Subscriber("/heart_rate", Int32, self.heart_rate_callback, queue_size=3000)
             self.pose_sub = rospy.Subscriber("/joint_angles", Float64MultiArray, self.pose_callback, queue_size=3000)
     
     def message(self, m, priority=2):
-        #Only message if it has been 3 sec since last message ended
-        # if (len(self.message_time_stamps)) > 0:
-        #     last_message_time = self.message_time_stamps[-1]
-        #     if (datetime.now(timezone('EST')) - last_message_time).total_seconds() < 3 and priority < 2:
-        #         #Skip message
-        #         self.logger.info('Skipping {}'.format(m))
-        #         return False
+        ##TODO:implement this
+        # Only message if it has been 3 sec since last message ended
+        curr_time = rospy.Time.now()
+        #delta timestep 
+        delta_timestep = curr_time.to_sec() - self.last_pepper_message_timestep.to_sec()
+        if(curr_time.to_sec() - self.last_pepper_message_timestep.to_sec()) < 3 and priority < 2:
+            #skip message
+            self.logger.info('Skipping {}'.format(m))
+            return False
                 
         self.logger.info('Robot says: {}'.format(m))
         length_estimate = np.round(self.slope*syllables.estimate(m) + self.intercept)
 
         if not self.replay:
-            self.sound_pub.publish(m)
+            self.pepper_speech_pub.publish(m)
+        
+        self.last_pepper_message_timestep = curr_time
 
+        ##TODO: implement this
         # self.message_log.append(m)
         # self.message_time_stamps.append(datetime.now(timezone('EST')) + timedelta(seconds=length_estimate) )
         return True    
@@ -798,10 +804,9 @@ class ExerciseManager:
         #Robot says starting set and smile
         robot_message = "Get ready to start set %s of %s. You will be doing %s." % (set_num, tot_sets, exercise_name.replace("_", " " ))
         self.message(robot_message)
-        # self.change_expression('smile', self.start_set_smile, 4) ##TODO: change to smile based command for pepper robot
 
 
-##MAIN FUNCTION FOR STANDALONE EXERCISE CONTROLLER
+#MAIN FUNCTION FOR STANDALONE EXERCISE CONTROLLER
 if __name__ == '__main__':
     
     PARTICIPANT_ID = '0'

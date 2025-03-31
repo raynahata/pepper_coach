@@ -17,7 +17,6 @@ action_received = False
 
 rp = RosPack()
 
-
 class Pepper:
     def __init__(self):
         self.IP = "128.237.236.27"
@@ -35,6 +34,7 @@ class Pepper:
 
         self.pepper_params = self.load_params()
         
+        self.curr_message = ''
         self.is_action_received = False
         self.is_executing_action = False
 
@@ -56,7 +56,8 @@ class Pepper:
         self.exercise_publisher = rospy.Publisher("/exercise_command", String, queue_size=10)
         self.image_publisher = rospy.Publisher("/pepper_camera/image_raw", Image, queue_size=10)
 
-        rospy.Subscriber("pepper_state", String, self.callback_state)
+        rospy.Subscriber("pepper_state", String, self.callback_state, queue_size=1)
+        rospy.Subscriber("pepper_text_request", String, self.pepper_speech_callback)
 
 
         rospy.loginfo("Subscribed to /gpt_speech")
@@ -143,8 +144,18 @@ class Pepper:
         """
         Make Pepper say the provided text.
         """
-        rospy.loginfo("Saying: {}".format(text))
-        self.tts.say(text)
+        if text == self.curr_message:
+            return
+        else:
+            rospy.loginfo("Saying: {}".format(text))
+            self.tts.say(text)
+            self.curr_message = text
+        print("CURR MESSAGE:", self.curr_message)
+
+    def pepper_speech_callback(self, text):
+        
+        self.display_text(text.data)
+        self.say_text(text.data)
 
     def set_flag_listening(self):
         """
@@ -258,25 +269,23 @@ class Pepper:
             self.execute_parsed_movements(part_name, radian_positions)
     
     def execute_pepper_action(self):
-        if self.action_flag == "firm":
-            rospy.loginfo("Going to firm position")
-            #self.firm_position_action()
-            all_positions = self.pepper_params['feedback_position_info']['firm_positions']
-            self.parse_all_movements(all_positions)
-            self.is_executing_action = True
-        elif self.action_flag == "encouraging":
-            rospy.loginfo("Going to encouraging position")
-            #self.encouraging_position_action()
-            all_positions = self.pepper_params['feedback_position_info']['encouraging_positions']
-            self.parse_all_movements(all_positions)
-            self.is_executing_action = True
-        elif self.action_flag == "neutral":
-            rospy.loginfo("Going to neutral position")
-            # self.neutral_position_action()
-            all_positions = self.pepper_params['feedback_position_info']['neutral_positions']
-            self.parse_all_movements(all_positions)
+        if self.action_flag == 'positive_firm':
+            all_positions = self.pepper_params['feedback_position_info']['positive_firm']
+        elif self.action_flag == 'positive_neutral':
+            all_positions = self.pepper_params['feedback_position_info']['positive_neutral']
+        elif self.action_flag == 'positive_encouraging':
+            all_positions = self.pepper_params['feedback_position_info']['positive_encouraging']
+        elif self.action_flag == 'negative_firm':
+            all_positions = self.pepper_params['feedback_position_info']['negative_firm']
+        elif self.action_flag == 'negative_encouraging':
+            all_positions = self.pepper_params['feedback_position_info']['negative_encouraging']
+        elif self.action_flag == 'negative_neutral':
+            all_positions = self.pepper_params['feedback_position_info']['negative_neutral']
         else:
             rospy.logwarn("Action of " + str(self.action_flag) + " not implemented!")
+        
+        self.parse_all_movements(all_positions)
+        self.is_executing_action = True
     
     def shutdown_camera(self):
         rospy.loginfo("Shutting down Pepper camera node...")
@@ -294,16 +303,35 @@ class Pepper:
         r_joint_angles = self.motion.getAngles(r_joint_names, True)
         l_joint_angles = self.motion.getAngles(l_joint_names, True)
         #check joint angles for different actions
-        if self.action_flag == "firm":
-            #grab left and right arm commands
-            r_arm_degrees = self.pepper_params['feedback_position_info']['firm_positions'][r_arm_idx][degrees_idx]
+        if self.action_flag == 'positive_firm':
+            r_arm_degrees = self.pepper_params['feedback_position_info']['positive_firm'][r_arm_idx][degrees_idx]
             r_arm_radians = self.degrees_to_radians(r_arm_degrees)
-            l_arm_degrees = self.pepper_params['feedback_position_info']['firm_positions'][l_arm_idx][degrees_idx]
+            l_arm_degrees = self.pepper_params['feedback_position_info']['positive_firm'][l_arm_idx][degrees_idx]
             l_arm_radians = self.degrees_to_radians(l_arm_degrees)
-        elif self.action_flag == "encouraging":
-            r_arm_degrees = self.pepper_params['feedback_position_info']['encouraging_positions'][r_arm_idx][degrees_idx]
+        elif self.action_flag == 'positive_neutral':
+            r_arm_degrees = self.pepper_params['feedback_position_info']['positive_neutral'][r_arm_idx][degrees_idx]
             r_arm_radians = self.degrees_to_radians(r_arm_degrees)
-            l_arm_degrees = self.pepper_params['feedback_position_info']['encouraging_positions'][l_arm_idx][degrees_idx]
+            l_arm_degrees = self.pepper_params['feedback_position_info']['positive_neutral'][l_arm_idx][degrees_idx]
+            l_arm_radians = self.degrees_to_radians(l_arm_degrees)
+        elif self.action_flag == 'positive_encouraging':
+            r_arm_degrees = self.pepper_params['feedback_position_info']['positive_encouraging'][r_arm_idx][degrees_idx]
+            r_arm_radians = self.degrees_to_radians(r_arm_degrees)
+            l_arm_degrees = self.pepper_params['feedback_position_info']['positive_encouraging'][l_arm_idx][degrees_idx]
+            l_arm_radians = self.degrees_to_radians(l_arm_degrees)
+        elif self.action_flag == 'negative_firm':
+            r_arm_degrees = self.pepper_params['feedback_position_info']['negative_firm'][r_arm_idx][degrees_idx]
+            r_arm_radians = self.degrees_to_radians(r_arm_degrees)
+            l_arm_degrees = self.pepper_params['feedback_position_info']['negative_firm'][l_arm_idx][degrees_idx]
+            l_arm_radians = self.degrees_to_radians(l_arm_degrees)
+        elif self.action_flag == 'negative_encouraging':
+            r_arm_degrees = self.pepper_params['feedback_position_info']['negative_encouraging'][r_arm_idx][degrees_idx]
+            r_arm_radians = self.degrees_to_radians(r_arm_degrees)
+            l_arm_degrees = self.pepper_params['feedback_position_info']['negative_encouraging'][l_arm_idx][degrees_idx]
+            l_arm_radians = self.degrees_to_radians(l_arm_degrees)
+        elif self.action_flag == 'negative_neutral':
+            r_arm_degrees = self.pepper_params['feedback_position_info']['negative_neutral'][r_arm_idx][degrees_idx]
+            r_arm_radians = self.degrees_to_radians(r_arm_degrees)
+            l_arm_degrees = self.pepper_params['feedback_position_info']['negative_neutral'][l_arm_idx][degrees_idx]
             l_arm_radians = self.degrees_to_radians(l_arm_degrees)
         #iterate through each and determine if current value close to actual
         for curr_joint_angle, cmd_joint_angle in zip(r_joint_angles, r_arm_radians):
@@ -325,7 +353,6 @@ class Pepper:
         return data
 
     def main(self):
-        pepper_listener = Pepper()
         rate = rospy.Rate(5)  # 10hz
         # rospy.Subscriber("move_arm_command", String, pepper_listener.move_arm_callback)
         while not rospy.is_shutdown():
