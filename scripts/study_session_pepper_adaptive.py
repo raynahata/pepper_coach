@@ -14,13 +14,13 @@ import matplotlib.pyplot as plt
 import rospy
 import rosbag
 from rospkg import RosPack
-from std_msgs.msg import Int32
+from std_msgs.msg import Int32, String
 
 #package imports
 from exercise_manager import ExerciseManager
 
 #params TOOD: move these to yaml file
-SET_LENGTH = 20
+SET_LENGTH = 40
 REST_TIME = 40
 EXERCISE_LIST = ['bicep_curls'] #comment out before actual sessions
 # EXERCISE_LIST = ['bicep_curls', 'bicep_curls', 'lateral_raises', 'lateral_raises']
@@ -56,6 +56,9 @@ class StudySession:
         rospy.init_node('pepper_study_session', anonymous=True)
         rate = rospy.Rate(10)
 
+        #publisher
+        pepper_action_pub = rospy.Publisher("/pepper_action_request", String, queue_size=10)
+
         #subscribers
         heart_rate_sub = rospy.Subscriber("/heart_rate", Int32, self.intake_heart_rate_callback, queue_size=3000)
 
@@ -78,12 +81,9 @@ class StudySession:
             start_message = False
             halfway_message = False
 
-            #Lower arm all the way down #TODO: publish to pepper topic
-            #controller.move_right_arm('halfway', 'sides')
-            #from lateral_arm_motion_down
-            # right_arm_angles_degrees = [101.2, -0.5, 97.3, 5.8, -1.0]
-            # right_arm_angles_radians = pepper_controller.degrees_to_radians(right_arm_angles_degrees)
-            # pepper_controller.move_arm("R",  right_arm_angles_radians, speed=0.2)
+            #publish neutral action to pepper
+            pepper_action = 'positive_neutral'
+            pepper_action_pub.publish(pepper_action)
             
             inittime = datetime.now(timezone('EST'))
             
@@ -117,14 +117,10 @@ class StudySession:
 
             robot_message = "Time to rest."
             controller.message(robot_message)
-            # controller.change_expression('smile', controller.start_set_smile, 4) ##TODO:change to pepper smile based command
 
-            #Raise arm all the way up #TODO: publish to pepper topic
-            # controller.move_right_arm('sides', 'up')
-            # from lateral_arm_motion_up
-            # right_arm_angles_degrees = [101.2, -89.4, 97.3, 5.8, -1.0]
-            # right_arm_angles_radians = pepper_controller.degrees_to_radians(right_arm_angles_degrees)
-            # pepper_controller.move_arm("R", right_arm_angles_radians, speed=0.2)
+            #publish neutral action to pepper
+            pepper_action = 'positive_neutral'
+            pepper_action_pub.publish(pepper_action)
             
             if set_num + 1 < len(EXERCISE_LIST):
                 halfway_message = False
@@ -139,8 +135,6 @@ class StudySession:
                 robot_message = "Round complete. Please take a seat in the chair and complete a survey about this round on the laptop next to you."
                 controller.message(robot_message)
 
-        # controller.change_expression('smile', controller.start_set_smile, 4) ##TODO:change to pepper smile based command
-
         if controller.robot_style == 5:
             controller.process.stdin.write('exit\n')
             controller.process.stdin.flush()
@@ -150,23 +144,18 @@ class StudySession:
             if controller.process.stdout:
                 controller.process.stdout.close()
 
-        data = {'angles': controller.angles, 'peaks': controller.peaks, 'feedback': controller.feedback, 'times': controller.times, 'exercise_names': controller.exercise_name_list, 'all_hr': controller.all_heart_rates, 'heart_rates': controller.heart_rates, 'hrr': controller.hrr, 'actions': controller.actions, 'context': controller.contexts, 'rewards': controller.rewards}
-        
-        dbfile = open(rp.get_path('pepper_exercise_coach') + '/data/{}'.format(self.data_filename), 'ab')
-
-        pickle.dump(data, dbfile)                    
-        dbfile.close()
+        #dump dictionary into pickle
+        with open(rp.get_path('pepper_exercise_coach') + '/data/{}'.format(self.data_filename), 'wb') as f:
+            pickle.dump(controller.set_data_dict, f)
 
         controller.logger.info('Saved file {}'.format(self.data_filename))
         controller.logger.handlers.clear()
         logging.shutdown()
         print('Done!')
 
-        # controller.plot_angles() ##TODO: need to copy over when I have actual data
-        # plt.show()
-
-
 if __name__ == '__main__':
     session = StudySession()
     session.main()
     
+
+##TODO: record video from user
