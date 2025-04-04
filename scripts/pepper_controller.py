@@ -337,11 +337,11 @@ class Pepper:
             l_arm_radians = self.degrees_to_radians(l_arm_degrees)
         #iterate through each and determine if current value close to actual
         for curr_joint_angle, cmd_joint_angle in zip(r_joint_angles, r_arm_radians):
-            if abs(curr_joint_angle - cmd_joint_angle) > 0.1:
+            if abs(curr_joint_angle - cmd_joint_angle) > 0.25:
                 self.is_executing_action = True
                 return True
         for curr_joint_angle, cmd_joint_angle in zip(l_joint_angles, l_arm_radians):
-            if abs(curr_joint_angle - cmd_joint_angle) > 0.1:
+            if abs(curr_joint_angle - cmd_joint_angle) > 0.25:
                 self.is_executing_action = True
                 return True
         self.is_executing_action = False

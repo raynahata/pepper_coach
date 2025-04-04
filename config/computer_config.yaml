@@ -28,8 +28,8 @@ exercise_info:
     max_in_range: 130
   lateral_raises:
     segmenting_joints:
-      - [right_shoulder, 2]
-      - [left_shoulder, 2]
+      - [right_shoulder, 0]
+      - [left_shoulder, 0]
     comparison_joints:
       - [right_shoulder, [0, 1, 2]]
       - [left_shoulder, [0, 1, 2]]
@@ -39,7 +39,7 @@ exercise_info:
     threshold2: 12500
     segmenting_joint_inds: []
     current_angles_min: 35
-    max_grad: 200
+    max_grad: 100
     max_in_range: 45
 
 neutral_expressions:

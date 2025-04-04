@@ -1,0 +1,15 @@
+<launch>
+
+    <!-- pose tracking data -->
+    <node pkg="pepper_exercise_coach" type="pose_tracking.py" name="pose_tracking" output='screen' />
+
+    <!-- study session -->
+    <node pkg="pepper_exercise_coach" type='study_session_pepper_adaptive.py' name="adaptive_study_session" output="screen"/>
+
+    <!-- heart rate data -->
+    <node pkg="polar_hr_ros" type="ros_bluetooth.py" name="hr_monitor" output="screen"/>
+
+    <!-- rqt (to view image)  -->
+    <node pkg="rqt_gui" type="rqt_gui" name="rqt_gui"/>
+
+</launch>

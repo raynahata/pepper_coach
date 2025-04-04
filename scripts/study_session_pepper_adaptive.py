@@ -22,8 +22,8 @@ from exercise_manager import ExerciseManager
 #params TOOD: move these to yaml file
 SET_LENGTH = 40
 REST_TIME = 40
-EXERCISE_LIST = ['bicep_curls'] #comment out before actual sessions
-# EXERCISE_LIST = ['bicep_curls', 'bicep_curls', 'lateral_raises', 'lateral_raises']
+# EXERCISE_LIST = ['lateral_raises'] #comment out before actual sessions
+EXERCISE_LIST = ['bicep_curls', 'bicep_curls', 'lateral_raises', 'lateral_raises']
 
 #Change at beginning of study - make sure to change in adaptive_controller.py as well
 PARTICIPANT_ID = '0'
@@ -68,7 +68,7 @@ class StudySession:
 
         #Note from refactor: no round 0. All rounds should be > 0
         input("Press Enter to to start exercise session...")
-        controller.message('Let us start Round {} now. Please stand in the blue square and pick up the dumbbells if you want to use them'.format(ROUND_NUM))
+        controller.message('Let us start Round {} now. Please pick up the dumbbells if you want to use them'.format(ROUND_NUM))
         input("Press Enter to to start exercise session...")
 
         #For each exercise
@@ -88,7 +88,7 @@ class StudySession:
             inittime = datetime.now(timezone('EST'))
             
             #Stop between minimum and maximum time and minimum reps
-            while (datetime.now(timezone('EST')) - inittime).total_seconds() < SET_LENGTH:        
+            while (datetime.now(timezone('EST')) - inittime).total_seconds() < SET_LENGTH and not rospy.is_shutdown():        
                         
                 #Robot says starting set
                 if not start_message:
@@ -124,7 +124,7 @@ class StudySession:
             
             if set_num + 1 < len(EXERCISE_LIST):
                 halfway_message = False
-                while (datetime.now(timezone('EST')) - rest_start).total_seconds() < REST_TIME:
+                while (datetime.now(timezone('EST')) - rest_start).total_seconds() < REST_TIME and not rospy.is_shutdown():
                     
                     #Print halfway done with rest here
                     if (datetime.now(timezone('EST')) - rest_start).total_seconds() > REST_TIME/2 and not halfway_message:

@@ -32,7 +32,7 @@ class ExerciseManager:
         #Set initial parameters
         self.replay = replay
         self.flag = False
-        self.verbal_cadence = 2
+        self.verbal_cadence = 1
         self.nonverbal_cadence = 2
         self.intercept = 0.6477586140350873
         self.slope = 0.31077594
@@ -661,10 +661,8 @@ class ExerciseManager:
             #check if we're at a peak
             is_peak = True if (prev_deriv * next_deriv) < 0 else False
             #check if arms are raised
+            # print(prev_deriv, exercise_grad)
             is_arm_raised = True if (prev_deriv) > exercise_grad else False #also next grad?
-            #check if min joint angle reached
-            is_min_angle_reached = True if np.min(prev_joint_angles) < exercise_min or \
-                np.min(curr_joint_angles) < exercise_min or np.min(next_joint_angles) < exercise_min else False
             #ensure that we don't have duplicate readings
             if len(self.set_data_dict[self.curr_set]['peaks']) > 0:
                 timestamp_threshold = 1.0 #atleast 1 second between subsequent measurements
@@ -675,7 +673,8 @@ class ExerciseManager:
                 rep_duration = -1
                 is_new_peak = True
             #combine conditional statements
-            if is_peak and is_arm_raised and is_min_angle_reached and is_new_peak:
+            # print(is_peak, is_arm_raised, is_new_peak)
+            if is_peak and is_arm_raised and is_new_peak:
                 print("NEW PEAK DETECTED", rep_duration)
                 self.set_data_dict[self.curr_set]['peaks'].append(curr_timestamp)
                 #evaluate rep
@@ -779,20 +778,20 @@ class ExerciseManager:
 
 
 #MAIN FUNCTION FOR STANDALONE EXERCISE CONTROLLER
-if __name__ == '__main__':
+# if __name__ == '__main__':
     
-    PARTICIPANT_ID = '0'
-    ROBOT_STYLE = 5 #1 is firm, 3 is encouraging, 5 is adaptive
-    RESTING_HR = 97
-    MAX_HR = 220-26
-    LOG_FILENAME = "test.pickle"
+#     PARTICIPANT_ID = '0'
+#     ROBOT_STYLE = 5 #1 is firm, 3 is encouraging, 5 is adaptive
+#     RESTING_HR = 97
+#     MAX_HR = 220-26
+#     LOG_FILENAME = "test.pickle"
 
-    rospy.init_node('exercise_manager_node')
+#     rospy.init_node('exercise_manager_node')
 
-    controller = ExerciseManager(False, LOG_FILENAME, ROBOT_STYLE, RESTING_HR, MAX_HR, PARTICIPANT_ID)
-    rospy.sleep(2.0)
+#     controller = ExerciseManager(False, LOG_FILENAME, ROBOT_STYLE, RESTING_HR, MAX_HR, PARTICIPANT_ID)
+#     rospy.sleep(2.0)
 
-    controller.start_new_set(exercise_name='bicep_curls',set_num=1, tot_sets=1)
+#     controller.start_new_set(exercise_name='bicep_curls',set_num=1, tot_sets=1)
 
-    rospy.spin()
+#     rospy.spin()
 

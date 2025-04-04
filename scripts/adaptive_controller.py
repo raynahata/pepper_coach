@@ -8,10 +8,13 @@ from datetime import datetime
 import time
 import sys
 import pickle
+from rospkg import RosPack
+
+rp = RosPack()
 
 USER_ID = '0'
 
-model_filename = 'src/quori_exercises/exercise_session/models/Participant_{}_{}.pickle'.format(USER_ID, datetime.now().strftime("%Y-%m-%d--%H-%M-%S"))
+model_filename = 'Participant_{}_{}.pickle'.format(USER_ID, datetime.now().strftime("%Y-%m-%d--%H-%M-%S"))
 
 arms = [
             Arm(0, learner=GammaRegressor(alpha=1, beta=1)),
@@ -66,7 +69,7 @@ time.sleep(0.1)
 
 data = {'agent': agent, 'contexts': contexts, 'rewards': rewards, 'actions': actions}
 try:
-    with open(model_filename, 'wb') as f:
+    with open(rp.get_path('pepper_exercise_coach') + '/models/' + model_filename, 'wb') as f:
         pickle.dump(data, f)
 except Exception as e:
     print('Failed to save results: {}'.format(e))
